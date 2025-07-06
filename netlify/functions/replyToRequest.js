@@ -1,21 +1,7 @@
 const { MongoClient, ObjectId } = require('mongodb');
-const fetch = require('node-fetch');
+const { Expo } = require('expo-server-sdk');
 
-async function sendPushNotification(expoPushToken, message) {
-  const payload = {
-    to: expoPushToken,
-    sound: "default",
-    title: "📩 New Reply from Your Coach!",
-    body: message,
-    data: { screen: "Notifications" }, // Opens notification screen
-  };
-
-  await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
+const expo = new Expo();
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -37,9 +23,9 @@ exports.handler = async (event) => {
 
     const requestsCollection = db.collection('coach_requests');
     const notificationsCollection = db.collection('notifications');
-    const usersCollection = db.collection('users'); // 👈 user table with push tokens
+    const usersCollection = db.collection('users');
 
-    // Fetch original request to get userId
+    // Get original request
     const requestDoc = await requestsCollection.findOne({ _id: new ObjectId(requestId) });
     if (!requestDoc) {
       await client.close();
@@ -49,7 +35,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // Update request with reply
+    // Update the reply
     const result = await requestsCollection.updateOne(
       { _id: new ObjectId(requestId) },
       {
@@ -61,20 +47,30 @@ exports.handler = async (event) => {
       }
     );
 
-    // Save in-app notification
+    // Save notification in DB
     await notificationsCollection.insertOne({
       userId: requestDoc.userId,
       title: '📩 New Reply from Your Coach!',
-      body: `Coach replied to your request: "${reply}"`,
+      body: `Coach replied: "${reply}"`,
       isRead: false,
       createdAt: new Date(),
-      data: { screen: 'Replies', requestId },
+      data: { screen: 'Notifications', requestId },
     });
 
-    // Fetch user's Expo Push Token
+    // Send push notification
     const user = await usersCollection.findOne({ _id: new ObjectId(requestDoc.userId) });
-    if (user?.expoPushToken) {
-      await sendPushNotification(user.expoPushToken, `Coach replied: "${reply}"`);
+    const token = user?.expoPushToken;
+
+    if (token && Expo.isExpoPushToken(token)) {
+      await expo.sendPushNotificationsAsync([
+        {
+          to: token,
+          sound: 'default',
+          title: '📩 New Reply from Your Coach!',
+          body: `Coach replied: "${reply}"`,
+          data: { screen: 'Notifications', requestId },
+        },
+      ]);
     }
 
     await client.close();
@@ -84,7 +80,6 @@ exports.handler = async (event) => {
       body: JSON.stringify({ success: true, updated: result.modifiedCount }),
     };
   } catch (err) {
-    console.error("Error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Server error', error: err.message }),
