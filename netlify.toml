@@ -2,15 +2,14 @@
 directory = "netlify/functions"
 
 [build]
- command = "echo 'No build step'"
-publish = "netlify/functions"
-node_bundler = "esbuild"
+  command = "echo 'No build step'"
+  publish = "netlify/functions"
+  node_bundler = "esbuild"
+
+[build.environment]
+  NODE_VERSION = "18"
 
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
-
-  [build.environment]
-  MONGO_DB_URI = "mongodb+srv://calorieai:FitnessAIApp@cluster0.inkqcoh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-  JWT_SECRET = "skjdiu38u29s8df2jsdjf@#*(@sd823sd9823"
