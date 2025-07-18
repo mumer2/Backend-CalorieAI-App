@@ -9,7 +9,7 @@ exports.handler = async (event) => {
 
   const appid = 'wxd34d223a7b58e5fd'; // Your WeChat app ID
   const mch_id = '1498214512';
-  const key = 'YOUR_API_KEY'; // API v2 key from WeChat merchant platform
+  const key = '201508BeijingZJoyTechnologyCoLTD'; // API v2 key from WeChat merchant platform
   const notify_url = 'https://backend-calorieai-app.netlify.app/.netlify/functions/wechat-notify';
   const trade_type = 'MWEB';
   const scene_info = JSON.stringify({
