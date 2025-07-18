@@ -12,15 +12,14 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const xml2js = require("xml2js");
+require("dotenv").config();
 
 const generateNonceStr = () => Math.random().toString(36).substring(2, 15);
 
 exports.handler = async (event) => {
   try {
     // Step 1: Parse Request Body
-    const { total_fee = 1, out_trade_no = Date.now() } = JSON.parse(
-      event.body || "{}"
-    );
+    const { total_fee = 1, out_trade_no = Date.now() } = JSON.parse(event.body || "{}");
 
     // Step 2: Configure Credentials
     const appid = process.env.WECHAT_APPID;
@@ -30,13 +29,14 @@ exports.handler = async (event) => {
     const notify_url =
       "https://backend-calorieai-app.netlify.app/.netlify/functions/wechat-notify";
     const trade_type = "MWEB";
-    const scene_info = JSON.stringify({
-      h5_info: {
-        type: "Wap",
-        wap_url: "https://yourfrontenddomain.com",
-        wap_name: "Your App Name",
-      },
-    });
+  const scene_info = JSON.stringify({
+  h5_info: {
+    type: "Wap",
+    wap_url: "https://calorieai-app.netlify.app",
+    wap_name: "Calorie AI",
+  },
+});
+
 
     // Step 3: Build Parameters
     const params = {
@@ -89,6 +89,8 @@ exports.handler = async (event) => {
     });
     const result = parsed.xml;
 
+    console.log("WeChat Pay Response:", result);
+
     if (result.return_code === "SUCCESS" && result.result_code === "SUCCESS") {
       return {
         statusCode: 200,
@@ -99,10 +101,12 @@ exports.handler = async (event) => {
         statusCode: 400,
         body: JSON.stringify({
           error: result.return_msg || result.err_code_des || "WeChat Pay error",
+          raw: result,
         }),
       };
     }
   } catch (err) {
+    console.error("WeChat Pay Error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message || "Unexpected error" }),
