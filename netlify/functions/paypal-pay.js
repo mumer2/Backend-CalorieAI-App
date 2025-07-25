@@ -1,61 +1,84 @@
+// /netlify/functions/capture-paypal-order.js
+
+const { MongoClient } = require('mongodb');
 const fetch = require('node-fetch');
 
+const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
+const MONGO_URI = process.env.MONGO_DB_URI;
+
+let cachedDb = null;
+const connectToDatabase = async () => {
+  if (cachedDb) return cachedDb;
+  const client = new MongoClient(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+  await client.connect();
+  cachedDb = client.db('calorieai');
+  return cachedDb;
+};
+
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+  const { token } = event.queryStringParameters;
+
+  if (!token) {
+    return { statusCode: 400, body: 'Missing PayPal token (order ID)' };
   }
 
   try {
-    const { amount, userId } = JSON.parse(event.body);
-    const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT_ID;
-    const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
-    const base = 'https://api-m.sandbox.paypal.com'; // Use live URL in production
-
-    const auth = Buffer.from(`${PAYPAL_CLIENT}:${PAYPAL_SECRET}`).toString('base64');
-
-    // Get access token
-    const tokenRes = await fetch(`${base}/v1/oauth2/token`, {
+    // Step 1: Get PayPal access token
+    const auth = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization:
+          'Basic ' +
+          Buffer.from(`${PAYPAL_CLIENT}:${PAYPAL_SECRET}`).toString('base64'),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
     });
 
-    const { access_token } = await tokenRes.json();
+    const authData = await auth.json();
+    const accessToken = authData.access_token;
 
-    // Create order
-    const orderRes = await fetch(`${base}/v2/checkout/orders`, {
+    // Step 2: Capture payment
+    const captureRes = await fetch(`https://api-m.paypal.com/v2/checkout/orders/${token}/capture`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        intent: 'CAPTURE',
-        purchase_units: [
-          {
-            amount: { currency_code: 'USD', value: amount },
-            custom_id: userId,
-          },
-        ],
-        application_context: {
-          return_url: 'https://your-app.com/success',
-          cancel_url: 'https://your-app.com/cancel',
-        },
-      }),
     });
 
-    const data = await orderRes.json();
-    const approvalUrl = data.links?.find((l) => l.rel === 'approve')?.href;
+    const captureData = await captureRes.json();
+
+    const userId =
+      captureData?.purchase_units?.[0]?.custom_id || null;
+
+    if (!userId) {
+      return { statusCode: 400, body: 'Missing custom_id (userId)' };
+    }
+
+    // Step 3: Update DB
+    const db = await connectToDatabase();
+    await db.collection('users').updateOne(
+      { userId },
+      { $set: { isSubscribed: true } },
+      { upsert: true }
+    );
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ approvalUrl }),
+      body: JSON.stringify({
+        success: true,
+        message: 'User successfully subscribed after PayPal payment.',
+      }),
     };
   } catch (err) {
-    console.error('PayPal error:', err);
-    return { statusCode: 500, body: 'PayPal order error' };
+    return {
+      statusCode: 500,
+      body: `Server Error: ${err.message}`,
+    };
   }
 };
