@@ -53,7 +53,7 @@ exports.handler = async (event) => {
           landing_page: 'LOGIN',
           user_action: 'PAY_NOW',
           return_url: `https://successscreen.netlify.app/success.html?userId=${userId}&paid=true`,
-          cancel_url: `https://successscreen.netlify.app/success.html?userId=${userId}&paid=false`,
+          cancel_url: `https://successscreen.netlify.app/cancel.html?userId=${userId}&paid=false`,
         },
       }),
     });
