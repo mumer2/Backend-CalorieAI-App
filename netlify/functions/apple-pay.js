@@ -38,8 +38,8 @@ exports.handler = async (event) => {
         userId,
         isSubscription: true,
       },
-      success_url: 'https://yourdomain.com/success.html',
-      cancel_url: 'https://yourdomain.com/cancel.html',
+      success_url: 'https://successscreen.netlify.app/success.html',
+      cancel_url: 'https://successscreen.netlify.app/cancel.html',
     });
 
     return {
