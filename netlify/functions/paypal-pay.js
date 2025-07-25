@@ -1,7 +1,17 @@
 const fetch = require('node-fetch');
+const { MongoClient } = require('mongodb');
 
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
+
+let cachedDb = null;
+const connectToDatabase = async (uri) => {
+  if (cachedDb) return cachedDb;
+  const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+  await client.connect();
+  cachedDb = client.db('calorieai');
+  return cachedDb;
+};
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -15,17 +25,14 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { amount, userId } = body;
+  const { orderId, userId } = body;
 
-  if (!amount || !userId) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Missing amount or userId' }),
-    };
+  if (!orderId || !userId) {
+    return { statusCode: 400, body: 'Missing orderId or userId' };
   }
 
   try {
-    // Step 1: Get PayPal access token
+    // Step 1: Get Access Token
     const authRes = await fetch('https://api-m.sandbox.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: {
@@ -45,50 +52,38 @@ exports.handler = async (event) => {
 
     const accessToken = authData.access_token;
 
-    // Step 2: Create PayPal order
-    const orderRes = await fetch('https://api-m.sandbox.paypal.com/v2/checkout/orders', {
+    // Step 2: Capture the order
+    const captureRes = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderId}/capture`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        intent: 'CAPTURE',
-        purchase_units: [
-          {
-            amount: {
-              currency_code: 'USD',
-              value: amount.toString(),
-            },
-          },
-        ],
-        application_context: {
-          brand_name: 'Calorie AI',
-          landing_page: 'LOGIN',
-          user_action: 'PAY_NOW',
-          return_url: `https://successscreen.netlify.app/success.html?userId=${userId}`,
-          cancel_url: 'https://successscreen.netlify.app/success.html',
-        },
-      }),
     });
 
-    const orderData = await orderRes.json();
+    const captureData = await captureRes.json();
 
-    const approvalUrl = orderData.links?.find(link => link.rel === 'approve')?.href;
-
-    if (!approvalUrl) {
+    const status = captureData.status;
+    if (status !== 'COMPLETED') {
       return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'No approval URL returned by PayPal' }),
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Payment not completed', status }),
       };
     }
 
+    // Step 3: Update user subscription
+    const db = await connectToDatabase(process.env.MONGO_DB_URI);
+    await db.collection('users').updateOne(
+      { userId },
+      { $set: { isSubscribed: true } },
+      { upsert: true }
+    );
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ approvalUrl, orderId: orderData.id }),
+      body: JSON.stringify({ success: true, status: 'COMPLETED' }),
     };
   } catch (err) {
-    console.error('PayPal Pay Error:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),
