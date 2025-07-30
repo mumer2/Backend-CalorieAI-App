@@ -4,7 +4,10 @@ const MONGO_URI = process.env.MONGO_DB_URI;
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ success: false, message: 'Method Not Allowed' }),
+    };
   }
 
   let mongo;
@@ -13,7 +16,10 @@ exports.handler = async function (event) {
     const { phone, code } = JSON.parse(event.body);
 
     if (!phone || !code) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Phone and code are required' }) };
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, message: 'Phone and code are required' }),
+      };
     }
 
     mongo = new MongoClient(MONGO_URI);
@@ -22,14 +28,33 @@ exports.handler = async function (event) {
     const db = mongo.db('calorieai');
     const record = await db.collection('otp_verifications').findOne({ phone });
 
-    if (!record || record.code !== code) {
+    if (!record) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Invalid or expired code' }),
+        body: JSON.stringify({ success: false, message: 'No verification record found for this phone' }),
       };
     }
 
-    // Delete the code after successful verification
+    if (record.code !== code) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, message: 'Invalid verification code' }),
+      };
+    }
+
+    // Optionally: Check expiry (e.g., 5 minutes)
+    const createdAt = new Date(record.createdAt);
+    const now = new Date();
+    const diffMinutes = (now - createdAt) / 1000 / 60;
+    if (diffMinutes > 5) {
+      await db.collection('otp_verifications').deleteOne({ phone });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, message: 'Code expired, please request a new one' }),
+      };
+    }
+
+    // Success: Delete the code after verification
     await db.collection('otp_verifications').deleteOne({ phone });
 
     return {
@@ -37,6 +62,7 @@ exports.handler = async function (event) {
       body: JSON.stringify({ success: true, message: 'Code verified successfully' }),
     };
   } catch (err) {
+    console.error('Verification Error:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ success: false, message: 'Server error', error: err.message }),
