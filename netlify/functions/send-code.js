@@ -14,30 +14,24 @@ const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUp
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
 // ✅ Format phone numbers with support for country code dropdown
-const formatPhoneNumber = (phone, countryCode = '92') => {
-  let formatted = phone.trim().replace(/\s+/g, ''); // Remove all spaces
+const formatPhoneNumber = (phone) => {
+  let formatted = phone.trim().replace(/\s+/g, '');
 
-  // Remove leading '+'
+  // Remove + or country code if included
   if (formatted.startsWith('+')) {
     formatted = formatted.slice(1);
   }
 
-  // If the number starts with '00', remove it (e.g. '0092' → '92')
-  if (formatted.startsWith('00')) {
-    formatted = formatted.slice(2);
+  if (formatted.startsWith('92')) {
+    formatted = formatted.slice(2); // remove country code
   }
 
-  // If it starts with a leading '0', remove it and prepend country code
-  if (formatted.startsWith('0')) {
-    formatted = `${countryCode}${formatted.slice(1)}`;
+  // Ensure leading 0 (for local Pakistani numbers)
+  if (!formatted.startsWith('0')) {
+    formatted = '0' + formatted;
   }
 
-  // If it still doesn't start with countryCode, prepend it
-  if (!formatted.startsWith(countryCode)) {
-    formatted = `${countryCode}${formatted}`;
-  }
-
-  return formatted;
+  return formatted; // Example output: 03229199459
 };
 
 exports.handler = async (event) => {
