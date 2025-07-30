@@ -3,9 +3,9 @@ const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
 // ✅ Use environment variables instead of hardcoding sensitive data
-const ACCOUNT_ID ='dlbjzy22';
-const PASSWORD ='Czhangyue123';
-const PRODUCT_ID ='1012818';
+const ACCOUNT_ID = 'dlbjzy22';
+const PASSWORD = 'Czhangyue123';
+const PRODUCT_ID = '1012818';
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey';
 
@@ -29,12 +29,8 @@ const formatPhoneNumber = (phone, countryCode = '92') => {
     formatted = `${countryCode}${formatted}`;
   }
 
-  return formatted; // ✅ No '+' at the start
+  return formatted;
 };
-console.log('✅ Final PhoneNos:', formattedPhone);
-
-
-
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -54,8 +50,11 @@ exports.handler = async (event) => {
       };
     }
 
-    // Format and generate OTP
+    // ✅ Format the phone number
     const formattedPhone = formatPhoneNumber(phone, countryCode || '92');
+    console.log('✅ Final PhoneNos:', formattedPhone);
+
+    // ✅ Generate verification details
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const timestamp = Math.floor(Date.now() / 1000);
     const random = Math.floor(Math.random() * 9000000000) + 100000000;
@@ -94,7 +93,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // ✅ Store OTP
+    // ✅ Store OTP in MongoDB
     mongo = new MongoClient(MONGO_URI);
     await mongo.connect();
     await mongo
@@ -114,7 +113,11 @@ exports.handler = async (event) => {
     console.error('❌ Error sending OTP:', error.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, message: 'Internal server error.', error: error.message }),
+      body: JSON.stringify({
+        success: false,
+        message: 'Internal server error.',
+        error: error.message,
+      }),
     };
   } finally {
     if (mongo) await mongo.close();
