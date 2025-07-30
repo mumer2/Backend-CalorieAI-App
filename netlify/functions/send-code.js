@@ -15,16 +15,24 @@ const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex'
 
 // ✅ Format phone numbers with support for country code dropdown
 const formatPhoneNumber = (phone, countryCode = '92') => {
-  let formatted = phone.trim().replace(/\s+/g, '');
+  let formatted = phone.trim().replace(/\s+/g, ''); // Remove all spaces
 
+  // Remove leading '+'
   if (formatted.startsWith('+')) {
-    formatted = formatted.slice(1); // remove '+'
+    formatted = formatted.slice(1);
   }
 
+  // If the number starts with '00', remove it (e.g. '0092' → '92')
+  if (formatted.startsWith('00')) {
+    formatted = formatted.slice(2);
+  }
+
+  // If it starts with a leading '0', remove it and prepend country code
   if (formatted.startsWith('0')) {
-    formatted = formatted.slice(1); // remove leading zero
+    formatted = `${countryCode}${formatted.slice(1)}`;
   }
 
+  // If it still doesn't start with countryCode, prepend it
   if (!formatted.startsWith(countryCode)) {
     formatted = `${countryCode}${formatted}`;
   }
