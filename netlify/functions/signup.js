@@ -20,12 +20,14 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { name, email, password, role, referralCode } = JSON.parse(event.body);
+    const { name, email, phone, password, role, referralCode } = JSON.parse(event.body);
 
-    if (!name || !email || !password || !role) {
+    if (!name || !password || !role || (!email && !phone)) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'All fields (name, email, password, role) are required' }),
+        body: JSON.stringify({
+          message: 'Name, password, role, and either email or phone are required',
+        }),
       };
     }
 
@@ -34,26 +36,31 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // Check if user already exists
-    const existingUser = await users.findOne({ email: email.toLowerCase() });
+    // Check if user already exists by email or phone
+    const existingUser = await users.findOne({
+      $or: [
+        email ? { email: email.toLowerCase() } : {},
+        phone ? { phone } : {},
+      ],
+    });
+
     if (existingUser) {
       await client.close();
       return {
         statusCode: 409,
-        body: JSON.stringify({ message: 'User already exists' }),
+        body: JSON.stringify({ message: 'User with same email or phone already exists' }),
       };
     }
 
     // Hash the password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Initial points for new user
+    // Initial points
     let points = 50;
 
-    // Create new user document
+    // Create user object
     const newUser = {
       name: name.trim(),
-      email: email.toLowerCase(),
       passwordHash,
       role: role.toLowerCase(),
       points,
@@ -61,22 +68,23 @@ exports.handler = async (event) => {
       createdAt: new Date(),
     };
 
+    if (email) newUser.email = email.toLowerCase();
+    if (phone) newUser.phone = phone;
+
+    // Insert user
     const result = await users.insertOne(newUser);
     const insertedId = result.insertedId;
 
-    // Generate referral code (e.g., last 6 characters of ObjectId)
+    // Generate referral code
     const newReferralCode = insertedId.toHexString().slice(-6);
-
-    // Save referral code to user document
     await users.updateOne(
       { _id: insertedId },
       { $set: { referralCode: newReferralCode } }
     );
 
-    // Reward referrer if referralCode was used
+    // Handle referral
     if (referralCode) {
       const referrer = await users.findOne({ referralCode });
-
       if (referrer) {
         await users.updateOne(
           { _id: referrer._id },
@@ -95,7 +103,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: 'User registered and rewarded successfully',
         userId: insertedId.toString(),
-        points: points,
+        points,
         referralCode: newReferralCode,
       }),
     };
