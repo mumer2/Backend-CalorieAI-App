@@ -5,7 +5,8 @@ const { MongoClient } = require('mongodb');
 // ENV VARS (Replace with your actual values or use Netlify Dashboard)
 const ACCOUNT_ID = process.env.LMOBILE_ACCOUNT_ID;
 const PASSWORD = process.env.LMOBILE_PASSWORD;
-const PRODUCT_ID = 1012818; // Replace with your actual ProductId from Lmobile
+const PRODUCT_ID = process.env.LMLOBILE_PRODUCT_ID;
+// const PRODUCT_ID = 1012818; // Replace with your actual ProductId from Lmobile
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey'; // Always fixed
 
