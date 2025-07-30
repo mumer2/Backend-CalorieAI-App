@@ -2,34 +2,33 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
-// Hardcoded credentials (better to move to env vars)
-const ACCOUNT_ID = 'dlbjzy22';
-const PASSWORD = 'Czhangyue123';
-const PRODUCT_ID = '1012818';
+// ✅ Use environment variables instead of hardcoding sensitive data
+const ACCOUNT_ID = process.env.LMOBILE_ACCOUNT_ID;
+const PASSWORD = process.env.LMOBILE_PASSWORD;
+const PRODUCT_ID = process.env.LMOBILE_PRODUCT_ID;
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey';
 
-// Helpers
+// 🔒 Utility functions
 const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUpperCase();
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
-// Format phone to international format
-const formatPhoneNumber = (phone) => {
-  let formatted = phone.trim().replace(/\s+/g, '');
+// ✅ Format phone numbers with support for country code dropdown
+const formatPhoneNumber = (phone, countryCode = '92') => {
+  let formatted = phone.trim().replace(/\D/g, '');
 
-  // Remove + and leading 0s, then prepend country code
-  if (formatted.startsWith('+')) {
-    formatted = formatted.slice(1); // remove '+'
-  } else if (formatted.startsWith('0')) {
-    formatted = formatted.slice(1); // remove '0'
-    formatted = `92${formatted}`; // add default country code (e.g., 92 for Pakistan)
-  } else if (!formatted.startsWith('92')) {
-    formatted = `92${formatted}`; // fallback
+  // If phone starts with "0", remove it and add default country code
+  if (formatted.startsWith('0')) {
+    formatted = formatted.substring(1);
   }
 
-  return formatted; // Now always numeric like 923229199459
-};
+  // Prepend country code if not already there
+  if (!formatted.startsWith(countryCode)) {
+    formatted = `${countryCode}${formatted}`;
+  }
 
+  return formatted;
+};
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -39,16 +38,18 @@ exports.handler = async (event) => {
   let mongo;
 
   try {
-    const { phone } = JSON.parse(event.body);
-    console.log('📱 Raw phone received:', phone);
+    const { phone, countryCode } = JSON.parse(event.body);
+    console.log('📱 Raw phone:', phone, '🌍 Country code:', countryCode);
 
     if (!phone) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Phone is required' }) };
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, message: 'Phone number is required.' }),
+      };
     }
 
-    const formattedPhone = formatPhoneNumber(phone);
-    console.log('📞 Formatted phone:', formattedPhone);
-
+    // Format and generate OTP
+    const formattedPhone = formatPhoneNumber(phone, countryCode || '92');
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const timestamp = Math.floor(Date.now() / 1000);
     const random = Math.floor(Math.random() * 9000000000) + 100000000;
@@ -83,14 +84,13 @@ exports.handler = async (event) => {
     if (smsRes.data.Result !== 'succ') {
       return {
         statusCode: 500,
-        body: JSON.stringify({ success: false, message: smsRes.data.Reason }),
+        body: JSON.stringify({ success: false, message: smsRes.data.Reason || 'SMS sending failed.' }),
       };
     }
 
-    // ✅ Save to MongoDB
+    // ✅ Store OTP
     mongo = new MongoClient(MONGO_URI);
     await mongo.connect();
-
     await mongo
       .db('calorieai')
       .collection('otp_verifications')
@@ -102,13 +102,13 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, message: 'OTP sent successfully' }),
+      body: JSON.stringify({ success: true, message: 'OTP sent successfully.' }),
     };
   } catch (error) {
-    console.error('❌ Send OTP Error:', error);
+    console.error('❌ Error sending OTP:', error.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, message: 'Internal server error', error: error.message }),
+      body: JSON.stringify({ success: false, message: 'Internal server error.', error: error.message }),
     };
   } finally {
     if (mongo) await mongo.close();
