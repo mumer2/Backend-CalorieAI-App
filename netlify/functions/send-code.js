@@ -3,9 +3,9 @@ const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
 // Load environment variables
-const ACCOUNT_ID =dlbjzy22;
+const ACCOUNT_ID ='dlbjzy22';
 const PASSWORD = process.env.LMOBILE_PASSWORD;
-const PRODUCT_ID =1012818;
+const PRODUCT_ID ='1012818';
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey'; // fixed string
 
