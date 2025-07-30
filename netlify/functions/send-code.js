@@ -14,26 +14,15 @@ const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUp
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
 // ✅ Format phone to international format (e.g., 923001234567)
-const formatPhoneNumber = (phone, countryCode = '92') => {
+const formatPhoneNumber = (phone) => {
   let formatted = phone.trim().replace(/\s+/g, '');
 
+  // Remove '+' if exists
   if (formatted.startsWith('+')) {
-    return formatted; // Already valid
+    formatted = formatted.slice(1);
   }
 
-  if (formatted.startsWith('00')) {
-    formatted = formatted.slice(2);
-  }
-
-  if (formatted.startsWith('0')) {
-    formatted = formatted.slice(1); // remove local leading zero
-  }
-
-  if (!formatted.startsWith(countryCode)) {
-    formatted = `${countryCode}${formatted}`;
-  }
-
-  return `+${formatted}`;
+  return formatted; // Don't prepend 92 or anything; keep it as-is
 };
 
 
