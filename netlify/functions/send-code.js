@@ -14,21 +14,18 @@ const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUp
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
 // ✅ Format phone numbers with support for country code dropdown
-const formatPhoneNumber = (phone, countryCode = '92') => {
-  let formatted = phone.trim().replace(/\D/g, '');
+const formatPhoneNumber = (phone) => {
+  // Remove all spaces
+  let formatted = phone.trim().replace(/\s+/g, '');
 
-  // If phone starts with "0", remove it and add default country code
-  if (formatted.startsWith('0')) {
-    formatted = formatted.substring(1);
-  }
-
-  // Prepend country code if not already there
-  if (!formatted.startsWith(countryCode)) {
-    formatted = `${countryCode}${formatted}`;
+  // If it starts with +, remove it (API doesn't accept +)
+  if (formatted.startsWith('+')) {
+    formatted = formatted.slice(1);
   }
 
   return formatted;
 };
+
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
