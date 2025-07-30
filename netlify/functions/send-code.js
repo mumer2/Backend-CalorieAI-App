@@ -14,17 +14,24 @@ const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUp
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
 // ✅ Format phone numbers with support for country code dropdown
-const formatPhoneNumber = (phone) => {
-  // Remove all spaces
+const formatPhoneNumber = (phone, countryCode = '92') => {
   let formatted = phone.trim().replace(/\s+/g, '');
 
-  // If it starts with +, remove it (API doesn't accept +)
   if (formatted.startsWith('+')) {
-    formatted = formatted.slice(1);
+    return formatted; // Already in full E.164 format
   }
 
-  return formatted;
+  if (formatted.startsWith('0')) {
+    formatted = formatted.slice(1); // remove leading zero
+  }
+
+  if (!formatted.startsWith(countryCode)) {
+    formatted = `${countryCode}${formatted}`;
+  }
+
+  return `+${formatted}`; // Ensure it returns something like "+923001234567"
 };
+
 
 
 exports.handler = async (event) => {
