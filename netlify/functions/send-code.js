@@ -18,23 +18,24 @@ const formatPhoneNumber = (phone, countryCode = '92') => {
   let formatted = phone.trim().replace(/\s+/g, '');
 
   if (formatted.startsWith('+')) {
-    formatted = formatted.slice(1); // Remove leading '+'
+    return formatted; // Already valid
   }
 
   if (formatted.startsWith('00')) {
-    formatted = formatted.slice(2); // Remove 00
+    formatted = formatted.slice(2);
   }
 
   if (formatted.startsWith('0')) {
-    formatted = formatted.slice(1); // Remove leading zero
+    formatted = formatted.slice(1); // remove local leading zero
   }
 
   if (!formatted.startsWith(countryCode)) {
     formatted = `${countryCode}${formatted}`;
   }
 
-  return formatted; // Final: 923001234567
+  return `+${formatted}`;
 };
+
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
