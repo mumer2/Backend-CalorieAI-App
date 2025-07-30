@@ -36,13 +36,20 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // Check if user already exists by email or phone
-    const existingUser = await users.findOne({
-      $or: [
-        email ? { email: email.toLowerCase() } : {},
-        phone ? { phone } : {},
-      ],
-    });
+    // Check if user already exists (by email or phone)
+    const query = [];
+    if (email) query.push({ email: email.toLowerCase() });
+    if (phone) query.push({ phone });
+
+    if (query.length === 0) {
+      await client.close();
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Invalid input: missing email and phone' }),
+      };
+    }
+
+    const existingUser = await users.findOne({ $or: query });
 
     if (existingUser) {
       await client.close();
@@ -55,10 +62,8 @@ exports.handler = async (event) => {
     // Hash the password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Initial points
+    // Create new user
     let points = 50;
-
-    // Create user object
     const newUser = {
       name: name.trim(),
       passwordHash,
@@ -71,20 +76,21 @@ exports.handler = async (event) => {
     if (email) newUser.email = email.toLowerCase();
     if (phone) newUser.phone = phone;
 
-    // Insert user
     const result = await users.insertOne(newUser);
     const insertedId = result.insertedId;
 
-    // Generate referral code
-    const newReferralCode = insertedId.toHexString().slice(-6);
+    // Create referral code (last 6 chars of ObjectId)
+    const generatedReferralCode = insertedId.toHexString().slice(-6);
+
     await users.updateOne(
       { _id: insertedId },
-      { $set: { referralCode: newReferralCode } }
+      { $set: { referralCode: generatedReferralCode } }
     );
 
-    // Handle referral
+    // Handle referral if provided
     if (referralCode) {
       const referrer = await users.findOne({ referralCode });
+
       if (referrer) {
         await users.updateOne(
           { _id: referrer._id },
@@ -101,20 +107,17 @@ exports.handler = async (event) => {
     return {
       statusCode: 201,
       body: JSON.stringify({
-        message: 'User registered and rewarded successfully',
+        message: 'User registered successfully',
         userId: insertedId.toString(),
         points,
-        referralCode: newReferralCode,
+        referralCode: generatedReferralCode,
       }),
     };
-  } catch (err) {
-    console.error('❌ Signup error:', err);
+  } catch (error) {
+    console.error('❌ Signup Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        message: 'Server error',
-        error: err.message,
-      }),
+      body: JSON.stringify({ message: 'Internal server error', error: error.message }),
     };
   }
 };
