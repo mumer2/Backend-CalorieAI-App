@@ -5,7 +5,7 @@ const { MongoClient } = require('mongodb');
 // Load environment variables
 const ACCOUNT_ID = process.env.LMOBILE_ACCOUNT_ID;
 const PASSWORD = process.env.LMOBILE_PASSWORD;
-const PRODUCT_ID = parseInt(process.env.LMOBILE_PRODUCT_ID, 10);
+const PRODUCT_ID = process.env.LMOBILE_PRODUCT_ID;
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey'; // fixed string
 
