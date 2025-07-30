@@ -16,17 +16,20 @@ const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex'
 // Format phone to international format
 const formatPhoneNumber = (phone) => {
   let formatted = phone.trim().replace(/\s+/g, '');
-  // If number starts with 0, remove it
-  if (formatted.startsWith('0')) {
-    formatted = formatted.slice(1);
+
+  // Remove + and leading 0s, then prepend country code
+  if (formatted.startsWith('+')) {
+    formatted = formatted.slice(1); // remove '+'
+  } else if (formatted.startsWith('0')) {
+    formatted = formatted.slice(1); // remove '0'
+    formatted = `92${formatted}`; // add default country code (e.g., 92 for Pakistan)
+  } else if (!formatted.startsWith('92')) {
+    formatted = `92${formatted}`; // fallback
   }
-  // If doesn't start with +, add default country code (change this as needed)
-  if (!formatted.startsWith('+')) {
-    // You can set default country code here — like +92 for Pakistan
-    formatted = `+92${formatted}`;
-  }
-  return formatted;
+
+  return formatted; // Now always numeric like 923229199459
 };
+
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
