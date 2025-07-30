@@ -42,7 +42,7 @@ exports.handler = async (event) => {
       ExtendNo: '',
       ProductId: PRODUCT_ID,
       PhoneNos: phone,
-      Content: `【WeChat Communication】Your verification code is ${code}`,
+      Content: `【CalorieAI】Your verification code is ${code}`,
       SendTime: '',
       OutId: '',
     };
