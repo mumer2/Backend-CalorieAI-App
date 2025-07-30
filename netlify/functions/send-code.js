@@ -2,19 +2,14 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
-// Load environment variables
-const ACCOUNT_ID ='dlbjzy22';
+const ACCOUNT_ID = 'dlbjzy22';
 const PASSWORD = process.env.LMOBILE_PASSWORD;
-const PRODUCT_ID ='1012818';
+const PRODUCT_ID = '1012818';
 const MONGO_URI = process.env.MONGO_DB_URI;
-const ENCRYPT_KEY = 'SMmsEncryptKey'; // fixed string
+const ENCRYPT_KEY = 'SMmsEncryptKey';
 
-// Helper functions
-const md5 = (input) =>
-  crypto.createHash('md5').update(input).digest('hex').toUpperCase();
-
-const sha256 = (input) =>
-  crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
+const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUpperCase();
+const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -25,19 +20,16 @@ exports.handler = async (event) => {
 
   try {
     const { phone } = JSON.parse(event.body);
+    console.log('📱 Phone received:', phone);
 
-    if (!phone || typeof phone !== 'string') {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Phone is required' }),
-      };
+    if (!phone) {
+      return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Phone is required' }) };
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const timestamp = Math.floor(Date.now() / 1000);
-    const random = Math.floor(Math.random() * 8999999999) + 1000000000;
+    const random = Math.floor(Math.random() * 9000000000) + 100000000;
 
-    // Hash password and access key
     const passwordHash = md5(PASSWORD + ENCRYPT_KEY);
     const accessKeyString = `AccountId=${ACCOUNT_ID}&PhoneNos=${phone}&Password=${passwordHash}&Random=${random}&Timestamp=${timestamp}`;
     const accessKey = sha256(accessKeyString);
@@ -57,7 +49,6 @@ exports.handler = async (event) => {
 
     console.log('📤 Sending payload:', requestBody);
 
-    // 1. Send the SMS
     const smsRes = await axios.post(
       'https://api.51welink.com/EncryptionSubmit/SendSms.ashx',
       requestBody,
@@ -69,16 +60,15 @@ exports.handler = async (event) => {
     if (smsRes.data.Result !== 'succ') {
       return {
         statusCode: 500,
-        body: JSON.stringify({
-          success: false,
-          message: smsRes.data.Reason || 'SMS send failed',
-        }),
+        body: JSON.stringify({ success: false, message: smsRes.data.Reason }),
       };
     }
 
-    // 2. Store OTP in MongoDB
+    // ✅ Mongo Insert
+    console.log('📦 Storing OTP in MongoDB...');
     mongo = new MongoClient(MONGO_URI);
     await mongo.connect();
+
     await mongo
       .db('calorieai')
       .collection('otp_verifications')
@@ -88,19 +78,17 @@ exports.handler = async (event) => {
         { upsert: true }
       );
 
+    console.log('✅ OTP stored');
+
     return {
       statusCode: 200,
       body: JSON.stringify({ success: true, message: 'OTP sent successfully' }),
     };
-  } catch (err) {
-    console.error('❌ Error sending OTP:', err);
+  } catch (error) {
+    console.error('❌ Send OTP Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        success: false,
-        message: 'Internal Server Error',
-        error: err.message,
-      }),
+      body: JSON.stringify({ success: false, message: 'Internal server error', error: error.message }),
     };
   } finally {
     if (mongo) await mongo.close();
