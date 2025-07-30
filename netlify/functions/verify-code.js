@@ -1,71 +1,92 @@
 const { MongoClient } = require('mongodb');
 
+// 🔐 Secure values
 const MONGO_URI = process.env.MONGO_DB_URI;
 
-exports.handler = async function (event) {
+// 📱 Format phone number same as send-code.js
+const formatPhoneNumber = (phone, countryCode = '92') => {
+  let formatted = phone.trim().replace(/\s+/g, '');
+
+  if (formatted.startsWith('+')) {
+    formatted = formatted.slice(1);
+  }
+
+  if (formatted.startsWith('00')) {
+    formatted = formatted.slice(2);
+  }
+
+  if (formatted.startsWith('0')) {
+    formatted = formatted.slice(1);
+  }
+
+  if (!formatted.startsWith(countryCode)) {
+    formatted = `${countryCode}${formatted}`;
+  }
+
+  return formatted;
+};
+
+exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ success: false, message: 'Method Not Allowed' }),
-    };
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   let mongo;
 
   try {
     const { phone, code } = JSON.parse(event.body);
-
     if (!phone || !code) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Phone and code are required' }),
+        body: JSON.stringify({ success: false, message: 'Phone and code are required.' }),
       };
     }
+
+    const formattedPhone = formatPhoneNumber(phone);
+    console.log('🔍 Verifying for phone:', formattedPhone);
 
     mongo = new MongoClient(MONGO_URI);
     await mongo.connect();
 
-    const db = mongo.db('calorieai');
-    const record = await db.collection('otp_verifications').findOne({ phone });
+    const record = await mongo
+      .db('calorieai')
+      .collection('otp_verifications')
+      .findOne({ phone: formattedPhone });
 
     if (!record) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'No verification record found for this phone' }),
+        body: JSON.stringify({ success: false, message: 'No OTP found for this number.' }),
       };
     }
+
+    const now = new Date();
+    const createdAt = new Date(record.createdAt);
+    const diffInMinutes = (now - createdAt) / (1000 * 60);
 
     if (record.code !== code) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Invalid verification code' }),
+        body: JSON.stringify({ success: false, message: 'Invalid verification code.' }),
       };
     }
 
-    // Optionally: Check expiry (e.g., 5 minutes)
-    const createdAt = new Date(record.createdAt);
-    const now = new Date();
-    const diffMinutes = (now - createdAt) / 1000 / 60;
-    if (diffMinutes > 5) {
-      await db.collection('otp_verifications').deleteOne({ phone });
+    if (diffInMinutes > 5) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Code expired, please request a new one' }),
+        body: JSON.stringify({ success: false, message: 'OTP expired. Please request a new one.' }),
       };
     }
-
-    // Success: Delete the code after verification
-    await db.collection('otp_verifications').deleteOne({ phone });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, message: 'Code verified successfully' }),
+      body: JSON.stringify({ success: true, message: 'Phone number verified successfully.' }),
     };
   } catch (err) {
-    console.error('Verification Error:', err);
+    console.error('❌ Error verifying code:', err.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, message: 'Server error', error: err.message }),
+      body: JSON.stringify({ success: false, message: 'Internal server error.', error: err.message }),
     };
   } finally {
     if (mongo) await mongo.close();

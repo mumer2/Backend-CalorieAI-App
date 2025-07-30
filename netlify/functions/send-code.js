@@ -2,36 +2,38 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
-// ✅ Use environment variables instead of hardcoding sensitive data
+// 🔐 Secure credentials
 const ACCOUNT_ID = 'dlbjzy22';
 const PASSWORD = 'Czhangyue123';
 const PRODUCT_ID = '1012818';
-const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey';
+const MONGO_URI = process.env.MONGO_DB_URI;
 
-// 🔒 Utility functions
+// 🔐 Utility functions
 const md5 = (input) => crypto.createHash('md5').update(input).digest('hex').toUpperCase();
 const sha256 = (input) => crypto.createHash('sha256').update(input).digest('hex').toLowerCase();
 
-// ✅ Format phone numbers with support for country code dropdown
-const formatPhoneNumber = (phone) => {
+// ✅ Format phone to international format (e.g., 923001234567)
+const formatPhoneNumber = (phone, countryCode = '92') => {
   let formatted = phone.trim().replace(/\s+/g, '');
 
-  // Remove + or country code if included
   if (formatted.startsWith('+')) {
-    formatted = formatted.slice(1);
+    formatted = formatted.slice(1); // Remove leading '+'
   }
 
-  if (formatted.startsWith('92')) {
-    formatted = formatted.slice(2); // remove country code
+  if (formatted.startsWith('00')) {
+    formatted = formatted.slice(2); // Remove 00
   }
 
-  // Ensure leading 0 (for local Pakistani numbers)
-  if (!formatted.startsWith('0')) {
-    formatted = '0' + formatted;
+  if (formatted.startsWith('0')) {
+    formatted = formatted.slice(1); // Remove leading zero
   }
 
-  return formatted; // Example output: 03229199459
+  if (!formatted.startsWith(countryCode)) {
+    formatted = `${countryCode}${formatted}`;
+  }
+
+  return formatted; // Final: 923001234567
 };
 
 exports.handler = async (event) => {
@@ -52,11 +54,10 @@ exports.handler = async (event) => {
       };
     }
 
-    // ✅ Format the phone number
+    // ✅ Format and log final phone number
     const formattedPhone = formatPhoneNumber(phone, countryCode || '92');
     console.log('✅ Final PhoneNos:', formattedPhone);
 
-    // ✅ Generate verification details
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const timestamp = Math.floor(Date.now() / 1000);
     const random = Math.floor(Math.random() * 9000000000) + 100000000;
@@ -91,11 +92,14 @@ exports.handler = async (event) => {
     if (smsRes.data.Result !== 'succ') {
       return {
         statusCode: 500,
-        body: JSON.stringify({ success: false, message: smsRes.data.Reason || 'SMS sending failed.' }),
+        body: JSON.stringify({
+          success: false,
+          message: smsRes.data.Reason || 'SMS sending failed.',
+        }),
       };
     }
 
-    // ✅ Store OTP in MongoDB
+    // ✅ Store OTP
     mongo = new MongoClient(MONGO_URI);
     await mongo.connect();
     await mongo
