@@ -3,9 +3,9 @@ const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 
 // ✅ Use environment variables instead of hardcoding sensitive data
-const ACCOUNT_ID = process.env.LMOBILE_ACCOUNT_ID;
-const PASSWORD = process.env.LMOBILE_PASSWORD;
-const PRODUCT_ID = process.env.LMOBILE_PRODUCT_ID;
+const ACCOUNT_ID ='dlbjzy22';
+const PASSWORD ='Czhangyue123';
+const PRODUCT_ID ='1012818';
 const MONGO_URI = process.env.MONGO_DB_URI;
 const ENCRYPT_KEY = 'SMmsEncryptKey';
 
