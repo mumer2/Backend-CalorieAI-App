@@ -18,7 +18,7 @@ const formatPhoneNumber = (phone, countryCode = '92') => {
   let formatted = phone.trim().replace(/\s+/g, '');
 
   if (formatted.startsWith('+')) {
-    return formatted; // Already in full E.164 format
+    formatted = formatted.slice(1); // remove '+'
   }
 
   if (formatted.startsWith('0')) {
@@ -29,8 +29,10 @@ const formatPhoneNumber = (phone, countryCode = '92') => {
     formatted = `${countryCode}${formatted}`;
   }
 
-  return `+${formatted}`; // Ensure it returns something like "+923001234567"
+  return formatted; // ✅ No '+' at the start
 };
+console.log('✅ Final PhoneNos:', formattedPhone);
+
 
 
 
