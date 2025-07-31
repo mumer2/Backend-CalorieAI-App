@@ -22,7 +22,7 @@ const formatPhoneNumber = (phone) => {
     formatted = formatted.slice(1);
   }
 
-  return formatted; // Don't prepend 92 or anything; keep it as-is
+  return formatted; 
 };
 
 
