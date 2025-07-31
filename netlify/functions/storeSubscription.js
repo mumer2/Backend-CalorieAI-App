@@ -1,57 +1,32 @@
-// netlify/functions/storeSubscription.js
-const { MongoClient, ObjectId } = require('mongodb');
+// Step 1: Backend Function to store subscription
+// File: netlify/functions/storeSubscription.js
 
-const MONGO_URI = process.env.MONGO_DB_URI;
-const DB_NAME = "calorieai";
-const COLLECTION = "subscriptions";
+const { MongoClient } = require('mongodb');
 
-const client = new MongoClient(MONGO_URI);
+const uri = process.env.MONGO_DB_URI; 
+const client = new MongoClient(uri);
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
-    const { userId, planType, paymentMethod, startDate, duration } = JSON.parse(event.body);
+    const data = JSON.parse(event.body);
+    const db = client.db('calorieai');
+    const collection = db.collection('subscriptions');
 
-    if (!userId || !planType || !paymentMethod || !duration) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields' }),
-      };
-    }
-
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const subscriptions = db.collection(COLLECTION);
-
-    const start = new Date(startDate || Date.now());
-    const expire = new Date(start);
-    if (duration === 'monthly') expire.setMonth(start.getMonth() + 1);
-    else if (duration === 'yearly') expire.setFullYear(start.getFullYear() + 1);
-
-    const result = await subscriptions.insertOne({
-      userId: new ObjectId(userId),
-      planType,
-      paymentMethod,
-      startDate: start,
-      endDate: expire,
-      createdAt: new Date(),
-    });
+    const result = await collection.insertOne(data);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, subscriptionId: result.insertedId }),
+      body: JSON.stringify({ message: 'Subscription stored', id: result.insertedId }),
     };
-  } catch (error) {
-    console.error("Subscription error:", error);
+  } catch (err) {
+    console.error(err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ message: 'Failed to store subscription' }),
     };
   }
 };
