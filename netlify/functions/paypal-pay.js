@@ -15,12 +15,12 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { amount, userId } = body;
+  const { amount, userId, plan } = body;
 
-  if (!amount || !userId) {
+  if (!amount || !userId || !plan) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing amount or userId' }),
+      body: JSON.stringify({ error: 'Missing amount, userId, or plan' }),
     };
   }
 
@@ -29,7 +29,9 @@ exports.handler = async (event) => {
     const authRes = await fetch('https://api-m.sandbox.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: {
-        Authorization: 'Basic ' + Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64'),
+        Authorization:
+          'Basic ' +
+          Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64'),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
@@ -47,19 +49,24 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         intent: 'CAPTURE',
-        purchase_units: [{ amount: { currency_code: 'USD', value: amount.toString() } }],
+        purchase_units: [
+          {
+            amount: { currency_code: 'USD', value: amount.toString() },
+            custom_id: userId, // Optional: attaches userId for tracking
+          },
+        ],
         application_context: {
           brand_name: 'Calorie AI',
           landing_page: 'LOGIN',
           user_action: 'PAY_NOW',
-          return_url: `https://successscreen.netlify.app/success.html?userId=${userId}&paid=true`,
-          cancel_url: `https://successscreen.netlify.app/cancel.html?userId=${userId}&paid=false`,
+          return_url: `https://successscreen.netlify.app/success.html?userId=${userId}&paid=true&plan=${plan}`,
+          cancel_url: `https://successscreen.netlify.app/cancel.html?userId=${userId}&paid=false&plan=${plan}`,
         },
       }),
     });
 
     const orderData = await orderRes.json();
-    const approvalUrl = orderData.links.find(link => link.rel === 'approve')?.href;
+    const approvalUrl = orderData.links.find((link) => link.rel === 'approve')?.href;
 
     if (!approvalUrl) {
       return {
@@ -73,7 +80,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ approvalUrl, orderId: orderData.id }),
     };
   } catch (err) {
-    console.error('PayPal Pay Error:', err);
+    console.error('❌ PayPal Pay Error:', err.message);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),

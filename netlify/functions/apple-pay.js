@@ -10,32 +10,35 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { userId, amount } = JSON.parse(event.body);
+    const { userId, amount, plan } = JSON.parse(event.body);
 
-    if (!userId || !amount) {
+    if (!userId || !amount || !plan) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing userId or amount' }),
+        body: JSON.stringify({ error: 'Missing userId, amount or plan' }),
       };
     }
 
+    const planLabel = plan === 'yearly' ? 'Yearly' : 'Monthly';
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'], // ✅ Apple Pay is supported under 'card'
+      payment_method_types: ['card'], // Includes Apple Pay
       mode: 'payment',
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'Calorie AI Subscription',
+              name: `Calorie AI ${planLabel} Subscription`,
             },
-            unit_amount: amount * 100, // convert dollars to cents
+            unit_amount: amount * 100, // Convert to cents
           },
           quantity: 1,
         },
       ],
       metadata: {
         userId,
+        plan,
         isSubscription: true,
       },
       success_url: 'https://successscreen.netlify.app/success.html',
