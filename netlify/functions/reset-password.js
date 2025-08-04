@@ -6,43 +6,33 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
+  const { email, phone, otp, newPassword } = JSON.parse(event.body);
+
+  if ((!email && !phone) || !otp || !newPassword) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message: 'OTP and new password are required along with email or phone',
+      }),
+    };
+  }
+
+  const client = new MongoClient(process.env.MONGO_DB_URI);
+
   try {
-    const { email, phone, otp, newPassword } = JSON.parse(event.body);
-
-    if ((!email && !phone) || !otp?.trim() || !newPassword?.trim()) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          message: 'OTP and new password are required along with email or phone.',
-        }),
-      };
-    }
-
-    const client = new MongoClient(process.env.MONGO_DB_URI);
     await client.connect();
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    const query = email
-      ? { email: email.toLowerCase() }
-      : { phone: phone.trim() };
+    // 🔍 Choose query based on email or phone
+    const query = email ? { email: email.toLowerCase() } : { phone };
 
     const user = await users.findOne(query);
 
-    const now = new Date();
-    const otpExpiry = user?.otpExpiresAt ? new Date(user.otpExpiresAt) : null;
-
-    if (
-      !user ||
-      user.otp !== otp ||
-      !otpExpiry ||
-      isNaN(otpExpiry) ||
-      otpExpiry < now
-    ) {
-      await client.close();
+    if (!user || user.otp !== otp || new Date(user.otpExpiresAt) < new Date()) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Invalid or expired OTP.' }),
+        body: JSON.stringify({ message: 'Invalid or expired OTP' }),
       };
     }
 
@@ -53,81 +43,20 @@ exports.handler = async (event) => {
       $unset: { otp: '', otpExpiresAt: '' },
     });
 
-    await client.close();
-
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Password reset successful.' }),
+      body: JSON.stringify({ message: 'Password reset successful' }),
     };
   } catch (err) {
-    console.error('❌ Reset password error:', err);
+    console.error('Reset password error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Server error', error: err.message }),
+      body: JSON.stringify({ message: 'Server error' }),
     };
+  } finally {
+    await client.close();
   }
 };
-
-
-// const bcrypt = require('bcryptjs');
-// const { MongoClient } = require('mongodb');
-
-// exports.handler = async (event) => {
-//   if (event.httpMethod !== 'POST') {
-//     return { statusCode: 405, body: 'Method Not Allowed' };
-//   }
-
-//   const { email, phone, otp, newPassword } = JSON.parse(event.body);
-
-//   if ((!email && !phone) || !otp || !newPassword) {
-//     return {
-//       statusCode: 400,
-//       body: JSON.stringify({
-//         message: 'OTP and new password are required along with email or phone',
-//       }),
-//     };
-//   }
-
-//   const client = new MongoClient(process.env.MONGO_DB_URI);
-
-//   try {
-//     await client.connect();
-//     const db = client.db('calorieai');
-//     const users = db.collection('users');
-
-//     // 🔍 Choose query based on email or phone
-//     const query = email ? { email: email.toLowerCase() } : { phone };
-
-//     const user = await users.findOne(query);
-
-//     if (!user || user.otp !== otp || new Date(user.otpExpiresAt) < new Date()) {
-//       return {
-//         statusCode: 400,
-//         body: JSON.stringify({ message: 'Invalid or expired OTP' }),
-//       };
-//     }
-
-//     const passwordHash = await bcrypt.hash(newPassword, 10);
-
-//     await users.updateOne(query, {
-//       $set: { passwordHash },
-//       $unset: { otp: '', otpExpiresAt: '' },
-//     });
-
-//     return {
-//       statusCode: 200,
-//       body: JSON.stringify({ message: 'Password reset successful' }),
-//     };
-//   } catch (err) {
-//     console.error('Reset password error:', err);
-//     return {
-//       statusCode: 500,
-//       body: JSON.stringify({ message: 'Server error' }),
-//     };
-//   } finally {
-//     await client.close();
-//   }
-// };
 
 
 // const bcrypt = require('bcryptjs');
