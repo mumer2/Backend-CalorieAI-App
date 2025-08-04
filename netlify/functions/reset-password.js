@@ -1,62 +1,73 @@
 const bcrypt = require('bcryptjs');
 const { MongoClient } = require('mongodb');
 
-const uri = process.env.MONGO_DB_URI; // Add this to your Netlify environment variables
-
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      body: 'Method Not Allowed',
+      body: JSON.stringify({ message: 'Method Not Allowed' }),
     };
   }
 
-  const { email, token, newPassword } = JSON.parse(event.body);
+  const { email, phone, otp, newPassword } = JSON.parse(event.body);
 
-  if (!email || !token || !newPassword) {
+  if ((!email && !phone) || !otp || !newPassword) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ message: 'Missing fields: email, token, or newPassword' }),
+      body: JSON.stringify({
+        message: 'OTP and new password are required along with email or phone',
+      }),
     };
   }
 
-  const client = new MongoClient(uri);
+  const client = new MongoClient(process.env.MONGO_DB_URI);
 
   try {
     await client.connect();
-
-    const db = client.db('calorieai'); // ✅ Directly specify your DB name here
+    const db = client.db('calorieai');
     const users = db.collection('users');
 
-    const user = await users.findOne({ email });
+    // 🔍 Build the query conditionally
+    const query = email ? { email: email.toLowerCase() } : { phone: phone.trim() };
 
-    if (
-      !user ||
-      user.resetToken !== token ||
-      new Date(user.resetTokenExpiry) < new Date()
-    ) {
+    const user = await users.findOne(query);
+
+    if (!user) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Invalid or expired token' }),
+        body: JSON.stringify({ message: 'User not found' }),
       };
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // ✅ Compare OTPs as strings
+    if (!user.otp || String(user.otp) !== String(otp)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Invalid OTP' }),
+      };
+    }
 
-    await users.updateOne(
-      { email },
-      {
-        $set: { password: hashedPassword },
-        $unset: { resetToken: '', resetTokenExpiry: '' },
-      }
-    );
+    // ❌ Removed expiration check:
+    // if (user.otpExpiresAt && new Date(user.otpExpiresAt) < new Date()) {
+    //   return {
+    //     statusCode: 400,
+    //     body: JSON.stringify({ message: 'OTP expired' }),
+    //   };
+    // }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await users.updateOne(query, {
+      $set: { passwordHash },
+      $unset: { otp: "", otpExpiresAt: "" },
+    });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Password reset successfully' }),
+      body: JSON.stringify({ message: 'Password reset successful' }),
     };
   } catch (err) {
-    console.error('Reset error:', err);
+    console.error('Reset password error:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Server error', error: err.message }),
@@ -65,6 +76,9 @@ exports.handler = async (event) => {
     await client.close();
   }
 };
+
+
+
 
 // const bcrypt = require('bcryptjs');
 // const { MongoClient } = require('mongodb');
