@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const connectDB = require('./utils/db');
+const connectDB = require('./models/db');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
