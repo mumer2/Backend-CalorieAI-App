@@ -6,33 +6,34 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const { email, phone, otp, newPassword } = JSON.parse(event.body);
-
-  if ((!email && !phone) || !otp || !newPassword) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({
-        message: 'OTP and new password are required along with email or phone',
-      }),
-    };
-  }
-
-  const client = new MongoClient(process.env.MONGO_DB_URI);
-
   try {
+    const { email, phone, otp, newPassword } = JSON.parse(event.body);
+
+    if ((!email && !phone) || !otp?.trim() || !newPassword?.trim()) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          message: 'OTP and new password are required along with email or phone.',
+        }),
+      };
+    }
+
+    const client = new MongoClient(process.env.MONGO_DB_URI);
     await client.connect();
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // 🔍 Choose query based on email or phone
-    const query = email ? { email: email.toLowerCase() } : { phone };
+    const query = email
+      ? { email: email.toLowerCase() }
+      : { phone: phone.trim() };
 
     const user = await users.findOne(query);
 
-    if (!user || user.otp !== otp || new Date(user.otpExpiresAt) < new Date()) {
+    if (!user || user.otp !== otp) {
+      await client.close();
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Invalid or expired OTP' }),
+        body: JSON.stringify({ message: 'Invalid OTP.' }),
       };
     }
 
@@ -40,23 +41,24 @@ exports.handler = async (event) => {
 
     await users.updateOne(query, {
       $set: { passwordHash },
-      $unset: { otp: '', otpExpiresAt: '' },
+      $unset: { otp: '', otpExpiresAt: '' }, // Clean up
     });
+
+    await client.close();
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Password reset successful' }),
+      body: JSON.stringify({ message: 'Password reset successful.' }),
     };
   } catch (err) {
-    console.error('Reset password error:', err);
+    console.error('❌ Reset password error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Server error' }),
+      body: JSON.stringify({ message: 'Server error', error: err.message }),
     };
-  } finally {
-    await client.close();
   }
 };
+
 
 
 // const bcrypt = require('bcryptjs');
