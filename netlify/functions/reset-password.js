@@ -49,8 +49,6 @@ exports.handler = async (event) => {
   }
 };
 
-
-
 // const bcrypt = require('bcryptjs');
 // const { MongoClient } = require('mongodb');
 
