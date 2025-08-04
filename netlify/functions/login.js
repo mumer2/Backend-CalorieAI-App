@@ -22,7 +22,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          message: 'Identifier (email or phone), password, and role are required',
+          message: 'Email or phone, password, and role are required',
         }),
       };
     }
@@ -32,12 +32,16 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // Determine if identifier is email or phone
+    // Match by phone or email
     let query = {};
-    if (/^\d{8,15}$/.test(identifier)) {
-      query = { phone: identifier };
-    } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+
+    const phoneRegex = /^[+\d\s\-]{7,20}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (emailRegex.test(identifier)) {
       query = { email: identifier };
+    } else if (phoneRegex.test(identifier)) {
+      query = { phone: identifier.replace(/\s+/g, '').replace(/^\+/, '') }; // Normalize
     } else {
       await client.close();
       return {
@@ -56,7 +60,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    const isMatch = await bcrypt.compare(password, user.passwordHash || user.password);
     if (!isMatch) {
       await client.close();
       return {
