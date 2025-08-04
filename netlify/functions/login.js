@@ -7,18 +7,14 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ message: 'Method Not Allowed' }),
-    };
+    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
   }
 
   try {
-    const { email, password, role } = JSON.parse(event.body);
+    const { email, phone, password, role } = JSON.parse(event.body);
 
-    const identifier = (email || '').trim().toLowerCase();
-
-    if (!identifier || !password || !role) {
+    // ✅ Check that either email or phone exists
+    if ((!email && !phone) || !password || !role) {
       return {
         statusCode: 400,
         body: JSON.stringify({
@@ -32,23 +28,10 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // Match by phone or email
-    let query = {};
-
-    const phoneRegex = /^[+\d\s\-]{7,20}$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (emailRegex.test(identifier)) {
-      query = { email: identifier };
-    } else if (phoneRegex.test(identifier)) {
-      query = { phone: identifier.replace(/\s+/g, '').replace(/^\+/, '') }; // Normalize
-    } else {
-      await client.close();
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: 'Invalid email or phone format' }),
-      };
-    }
+    // ✅ Search by email or phone
+    const query = email
+      ? { email: email.toLowerCase() }
+      : { phone: phone.trim() };
 
     const user = await users.findOne(query);
 
@@ -60,7 +43,8 @@ exports.handler = async (event) => {
       };
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash || user.password);
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+
     if (!isMatch) {
       await client.close();
       return {
@@ -73,7 +57,6 @@ exports.handler = async (event) => {
       {
         userId: user._id.toString(),
         email: user.email || '',
-        phone: user.phone || '',
         role: user.role,
       },
       JWT_SECRET,
