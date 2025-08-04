@@ -7,17 +7,23 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ message: 'Method Not Allowed' }),
+    };
   }
 
   try {
     const { email, password, role } = JSON.parse(event.body);
 
     const identifier = (email || '').trim().toLowerCase();
+
     if (!identifier || !password || !role) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Email or phone, password, and role are required' }),
+        body: JSON.stringify({
+          message: 'Identifier (email or phone), password, and role are required',
+        }),
       };
     }
 
@@ -26,13 +32,12 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    let user;
-
-    // If it's digits only, treat it as phone number
-    if (/^\d{6,15}$/.test(identifier)) {
-      user = await users.findOne({ phone: identifier });
+    // Determine if identifier is email or phone
+    let query = {};
+    if (/^\d{8,15}$/.test(identifier)) {
+      query = { phone: identifier };
     } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
-      user = await users.findOne({ email: identifier });
+      query = { email: identifier };
     } else {
       await client.close();
       return {
@@ -40,6 +45,8 @@ exports.handler = async (event) => {
         body: JSON.stringify({ message: 'Invalid email or phone format' }),
       };
     }
+
+    const user = await users.findOne(query);
 
     if (!user || user.role.toLowerCase() !== role.toLowerCase()) {
       await client.close();
