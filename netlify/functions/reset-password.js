@@ -1,21 +1,34 @@
 const bcrypt = require('bcryptjs');
-const connectDB = require('./models/db');
+const { MongoClient } = require('mongodb');
 
+const uri = process.env.MONGO_DB_URI; // Add this to your Netlify environment variables
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return {
+      statusCode: 405,
+      body: 'Method Not Allowed',
+    };
   }
 
   const { email, token, newPassword } = JSON.parse(event.body);
 
   if (!email || !token || !newPassword) {
-    return { statusCode: 400, body: 'Missing fields' };
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Missing fields: email, token, or newPassword' }),
+    };
   }
 
+  const client = new MongoClient(uri);
+
   try {
-    const db = await connectDB();
-    const user = await db.collection('users').findOne({ email });
+    await client.connect();
+
+    const db = client.db('calorieai'); // ✅ Directly specify your DB name here
+    const users = db.collection('users');
+
+    const user = await users.findOne({ email });
 
     if (
       !user ||
@@ -30,7 +43,7 @@ exports.handler = async (event) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await db.collection('users').updateOne(
+    await users.updateOne(
       { email },
       {
         $set: { password: hashedPassword },
@@ -43,10 +56,13 @@ exports.handler = async (event) => {
       body: JSON.stringify({ message: 'Password reset successfully' }),
     };
   } catch (err) {
+    console.error('Reset error:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Server error', error: err.message }),
     };
+  } finally {
+    await client.close();
   }
 };
 
