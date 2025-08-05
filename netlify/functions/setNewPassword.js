@@ -1,4 +1,3 @@
-// netlify/functions/setNewPassword.js
 const bcrypt = require('bcryptjs');
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
@@ -30,10 +29,11 @@ exports.handler = async (event) => {
     const identifierValue = email ? email.trim().toLowerCase() : phone.trim();
     const identifier = { [identifierField]: identifierValue };
 
-    // 1. Check if the token exists for this user
+    // ✅ 1. Check if the token is valid and not expired (10 minutes window)
     const validToken = await db.collection('reset_tokens').findOne({
       ...identifier,
       token,
+      createdAt: { $gt: new Date(Date.now() - 10 * 60 * 1000) }, // token expires after 10 minutes
     });
 
     if (!validToken) {
@@ -43,15 +43,14 @@ exports.handler = async (event) => {
       };
     }
 
-    // 2. Hash and update password
+    // ✅ 2. Hash and update the password
     const hashed = await bcrypt.hash(newPassword, 10);
-
     await db.collection('users').updateOne(
       identifier,
       { $set: { password: hashed } }
     );
 
-    // 3. Remove all tokens related to this identifier
+    // ✅ 3. Remove used tokens
     await db.collection('reset_tokens').deleteMany(identifier);
 
     return {
