@@ -74,7 +74,7 @@ exports.handler = async (event) => {
     if (method === 'email') {
       // ✅ Send email
       await transporter.sendMail({
-        from: `"Tarot Station" <${process.env.EMAIL_USER}>`,
+        from: `"Calorie AI" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: '🔐 Password Reset Code',
         html: `<p>Your password reset code is: <strong>${token}</strong></p>`,
