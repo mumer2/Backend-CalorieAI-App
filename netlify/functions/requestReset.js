@@ -14,10 +14,12 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Main handler
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ success: false, message: 'Method Not Allowed' }),
+    };
   }
 
   try {
@@ -37,14 +39,12 @@ exports.handler = async (event) => {
     await client.connect();
     const db = client.db('calorieai');
 
-    let user;
-    let method;
+    let user, method;
+
     if (/^\d{10,15}$/.test(identifier)) {
-      // If digits only → phone
       user = await db.collection('users').findOne({ phone: identifier });
       method = 'phone';
     } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
-      // If email format
       user = await db.collection('users').findOne({ email: identifier.toLowerCase() });
       method = 'email';
     } else {
@@ -63,16 +63,18 @@ exports.handler = async (event) => {
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Save token
-    await db.collection('reset_tokens').insertOne({
-      email: user.email || '',
-      phone: user.phone || '',
+    // Create token document without empty fields
+    const tokenDoc = {
       token,
       createdAt: new Date(),
-    });
+    };
+
+    if (user.email) tokenDoc.email = user.email.toLowerCase();
+    if (user.phone) tokenDoc.phone = user.phone;
+
+    await db.collection('reset_tokens').insertOne(tokenDoc);
 
     if (method === 'email') {
-      // ✅ Send email
       await transporter.sendMail({
         from: `"Calorie AI" <${process.env.EMAIL_USER}>`,
         to: user.email,
@@ -90,10 +92,7 @@ exports.handler = async (event) => {
         }),
       };
     } else {
-      // ✅ TODO: Send SMS via your provider
-      // Example placeholder:
-      // await sendSms(user.phone, `Your reset code is: ${token}`);
-
+      // Simulate SMS for now
       console.log(`📱 [DEV] Simulated SMS to ${user.phone}: ${token}`);
 
       return {
@@ -107,7 +106,7 @@ exports.handler = async (event) => {
       };
     }
   } catch (err) {
-    console.error('Reset error:', err.message);
+    console.error('❌ Reset error:', err.message);
     return {
       statusCode: 500,
       body: JSON.stringify({
@@ -118,4 +117,3 @@ exports.handler = async (event) => {
     };
   }
 };
-
