@@ -3,7 +3,7 @@ const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
 // MongoDB client
-const client = new MongoClient(process.env.MONGO_URI);
+const client = new MongoClient(process.env.MONGO_DB_URI);
 
 // Email transporter
 const transporter = nodemailer.createTransport({
@@ -35,7 +35,7 @@ exports.handler = async (event) => {
     }
 
     await client.connect();
-    const db = client.db('tarot-station');
+    const db = client.db('calorieai');
 
     let user;
     let method;
