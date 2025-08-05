@@ -45,10 +45,11 @@ exports.handler = async (event) => {
 
     // ✅ 2. Hash and update the password
     const hashed = await bcrypt.hash(newPassword, 10);
-    await db.collection('users').updateOne(
-      identifier,
-      { $set: { password: hashed } }
-    );
+   await db.collection('users').updateOne(
+  identifier,
+  { $set: { passwordHash: hashed } }
+);
+
 
     // ✅ 3. Remove used tokens
     await db.collection('reset_tokens').deleteMany(identifier);
