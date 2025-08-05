@@ -3,7 +3,7 @@ const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
 // MongoDB client
-const client = new MongoClient(process.env.MONGO_DB_URI);
+const client = new MongoClient(process.env.MONGO_URI);
 
 // Email transporter
 const transporter = nodemailer.createTransport({
@@ -14,12 +14,10 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Main handler
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ success: false, message: 'Method Not Allowed' }),
-    };
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
@@ -37,14 +35,16 @@ exports.handler = async (event) => {
     }
 
     await client.connect();
-    const db = client.db('calorieai');
+    const db = client.db('tarot-station');
 
-    let user, method;
-
+    let user;
+    let method;
     if (/^\d{10,15}$/.test(identifier)) {
+      // If digits only → phone
       user = await db.collection('users').findOne({ phone: identifier });
       method = 'phone';
     } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+      // If email format
       user = await db.collection('users').findOne({ email: identifier.toLowerCase() });
       method = 'email';
     } else {
@@ -63,20 +63,18 @@ exports.handler = async (event) => {
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Create token document without empty fields
-    const tokenDoc = {
+    // Save token
+    await db.collection('reset_tokens').insertOne({
+      email: user.email || '',
+      phone: user.phone || '',
       token,
       createdAt: new Date(),
-    };
-
-    if (user.email) tokenDoc.email = user.email.toLowerCase();
-    if (user.phone) tokenDoc.phone = user.phone;
-
-    await db.collection('reset_tokens').insertOne(tokenDoc);
+    });
 
     if (method === 'email') {
+      // ✅ Send email
       await transporter.sendMail({
-        from: `"Calorie AI" <${process.env.EMAIL_USER}>`,
+        from: `"Tarot Station" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: '🔐 Password Reset Code',
         html: `<p>Your password reset code is: <strong>${token}</strong></p>`,
@@ -92,7 +90,10 @@ exports.handler = async (event) => {
         }),
       };
     } else {
-      // Simulate SMS for now
+      // ✅ TODO: Send SMS via your provider
+      // Example placeholder:
+      // await sendSms(user.phone, `Your reset code is: ${token}`);
+
       console.log(`📱 [DEV] Simulated SMS to ${user.phone}: ${token}`);
 
       return {
@@ -106,7 +107,7 @@ exports.handler = async (event) => {
       };
     }
   } catch (err) {
-    console.error('❌ Reset error:', err.message);
+    console.error('Reset error:', err.message);
     return {
       statusCode: 500,
       body: JSON.stringify({
