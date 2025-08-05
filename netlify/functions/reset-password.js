@@ -1,22 +1,56 @@
 const bcrypt = require('bcryptjs');
 const { MongoClient } = require('mongodb');
 
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: 'OK',
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers,
       body: JSON.stringify({ message: 'Method Not Allowed' }),
     };
   }
 
-  const { email, phone, otp, newPassword } = JSON.parse(event.body);
+  let body;
+  try {
+    body = JSON.parse(event.body);
+  } catch (e) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ message: 'Invalid JSON format' }),
+    };
+  }
+
+  const { email, phone, otp, newPassword } = body;
 
   if ((!email && !phone) || !otp || !newPassword) {
     return {
       statusCode: 400,
+      headers,
       body: JSON.stringify({
         message: 'OTP and new password are required along with email or phone',
       }),
+    };
+  }
+
+  if (newPassword.length < 6) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ message: 'Password must be at least 6 characters' }),
     };
   }
 
@@ -27,30 +61,31 @@ exports.handler = async (event) => {
     const db = client.db('calorieai');
     const users = db.collection('users');
 
-    // 🔍 Build the query conditionally
     const query = email ? { email: email.toLowerCase() } : { phone: phone.trim() };
 
     const user = await users.findOne(query);
 
     if (!user) {
       return {
-        statusCode: 400,
+        statusCode: 404,
+        headers,
         body: JSON.stringify({ message: 'User not found' }),
       };
     }
 
-    // ✅ Compare OTPs as strings
     if (!user.otp || String(user.otp) !== String(otp)) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ message: 'Invalid OTP' }),
       };
     }
 
-    // ❌ Removed expiration check:
+    // Optional expiry check (you can uncomment if needed)
     // if (user.otpExpiresAt && new Date(user.otpExpiresAt) < new Date()) {
     //   return {
     //     statusCode: 400,
+    //     headers,
     //     body: JSON.stringify({ message: 'OTP expired' }),
     //   };
     // }
@@ -58,24 +93,27 @@ exports.handler = async (event) => {
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
     await users.updateOne(query, {
-      $set: { passwordHash },
+      $set: { password: passwordHash },
       $unset: { otp: "", otpExpiresAt: "" },
     });
 
     return {
       statusCode: 200,
+      headers,
       body: JSON.stringify({ message: 'Password reset successful' }),
     };
   } catch (err) {
     console.error('Reset password error:', err);
     return {
       statusCode: 500,
+      headers,
       body: JSON.stringify({ message: 'Server error', error: err.message }),
     };
   } finally {
     await client.close();
   }
 };
+
 
 
 
