@@ -4,14 +4,12 @@ const APP_ID = process.env.ALIPAY_APP_ID;
 const GATEWAY = "https://openapi.alipay.com/gateway.do";
 const PRIVATE_KEY = process.env.ALIPAY_PRIVATE_KEY;
 const NOTIFY_URL = process.env.ALIPAY_NOTIFY_URL;
-const RETURN_URL = process.env.ALIPAY_RETURN_URL; // User redirected after payment
+const RETURN_URL = process.env.ALIPAY_RETURN_URL; // user redirect after payment
 
 exports.handler = async function (event, context) {
   try {
-    const { plan, channel } = JSON.parse(event.body || "{}"); 
-    // channel = "web" or "wap"
-    
-    const planPrices = { monthly: "50.00", yearly: "399.00" };
+    const { plan } = JSON.parse(event.body || "{}");
+    const planPrices = { monthly: "50.00", yearly: "399.00" }; // Alipay expects plain numbers, no ¥
 
     if (!plan || !planPrices[plan]) {
       return {
@@ -20,18 +18,18 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Order info
+    // Build biz_content for WAP pay
     const bizContent = {
       out_trade_no: "ORDER_" + Date.now(),
-      product_code: channel === "wap" ? "QUICK_WAP_WAY" : "FAST_INSTANT_TRADE_PAY",
+      product_code: "QUICK_WAP_WAY", // required for wap.pay
       total_amount: planPrices[plan],
       subject: `Calorie AI App ${plan} subscription`,
     };
 
-    // Base params
+    // Build params
     const params = {
       app_id: APP_ID,
-      method: channel === "wap" ? "alipay.trade.wap.pay" : "alipay.trade.page.pay",
+      method: "alipay.trade.wap.pay", // WAP payment
       format: "JSON",
       charset: "utf-8",
       sign_type: "RSA2",
@@ -42,21 +40,22 @@ exports.handler = async function (event, context) {
       return_url: RETURN_URL,
     };
 
-    // 1) Normalize private key
+    // Step 1: Normalize private key (fixes Netlify PEM issue)
     const privateKeyPem = PRIVATE_KEY.replace(/\\n/g, "\n");
 
-    // 2) Sort and sign params
+    // Step 2: Sort params and build the string to sign
     const orderedString = Object.keys(params)
       .sort()
       .map((key) => `${key}=${params[key]}`)
       .join("&");
 
+    // Step 3: Sign with RSA2 (SHA256withRSA)
     const md = forge.md.sha256.create();
     md.update(orderedString, "utf8");
     const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
     const signature = forge.util.encode64(privateKey.sign(md));
 
-    // 3) Build the payment URL
+    // Step 4: Build the payment URL
     const urlParams = new URLSearchParams(params);
     urlParams.append("sign", signature);
 
@@ -67,7 +66,7 @@ exports.handler = async function (event, context) {
       body: JSON.stringify({ paymentUrl }),
     };
   } catch (err) {
-    console.error("Alipay error:", err);
+    console.error("Alipay WAP error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),
