@@ -69,7 +69,8 @@ exports.handler = async (event) => {
       ExtendNo: '',
       ProductId: PRODUCT_ID,
       PhoneNos: formattedPhone,
-      Content: `【CalorieAI】您的验证码是 ${code}，5分钟内有效。`,
+      // Content: `【CalorieAI】您的验证码是 ${code}，5分钟内有效。`,
+      Content: `【北京展跃科技】您的验证码为${code}，有效期5分钟。`,
       SendTime: '',
       OutId: '',
     };
