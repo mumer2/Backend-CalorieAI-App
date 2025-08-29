@@ -1,10 +1,10 @@
 const forge = require('node-forge');
 
-const APP_ID = 'YOUR_APP_ID';
+// Load credentials from environment variables
+const APP_ID = process.env.ALIPAY_APP_ID;
 const GATEWAY = 'https://openapi.alipay.com/gateway.do';
-const PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
-YOUR_PRIVATE_KEY_HERE
------END PRIVATE KEY-----`;
+const PRIVATE_KEY = process.env.ALIPAY_PRIVATE_KEY;
+const NOTIFY_URL = process.env.ALIPAY_NOTIFY_URL;
 
 exports.handler = async function(event, context) {
   const { plan } = JSON.parse(event.body || '{}');
@@ -32,7 +32,7 @@ exports.handler = async function(event, context) {
     timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
     version: '1.0',
     biz_content: JSON.stringify(bizContent),
-    notify_url: 'https://yourdomain.com/api/alipay-notify' // Set your notify URL
+    notify_url: NOTIFY_URL // Loaded from env
   };
 
   // Create the string to sign
