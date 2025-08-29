@@ -1,56 +1,75 @@
-const forge = require('node-forge');
+const { MongoClient } = require("mongodb");
+const AlipaySdk = require("alipay-sdk").default;
+const crypto = require("crypto");
 
-const ALIPAY_PUBLIC_KEY = process.env.ALIPAY_PUBLIC_KEY;
+let cachedDb = null;
 
-function verifySignature(params, signature) {
-  // Remove sign and sign_type from params
-  const filtered = {};
-  Object.keys(params)
-    .filter(key => key !== 'sign' && key !== 'sign_type')
-    .sort()
-    .forEach(key => {
-      filtered[key] = params[key];
-    });
-
-  // Build the string to verify
-  const signString = Object.keys(filtered)
-    .map(key => `${key}=${filtered[key]}`)
-    .join('&');
-
-  // Verify signature
-  const publicKey = forge.pki.publicKeyFromPem(ALIPAY_PUBLIC_KEY);
-  const md = forge.md.sha256.create();
-  md.update(signString, 'utf8');
-  const decodedSignature = forge.util.decode64(signature);
-
-  return publicKey.verify(md.digest().bytes(), decodedSignature);
-}
-
-exports.handler = async function(event, context) {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
-
-  // Parse Alipay notification (x-www-form-urlencoded)
-  const params = {};
-  event.body.split('&').forEach(pair => {
-    const [key, value] = pair.split('=');
-    params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+const connectToDatabase = async (uri) => {
+  if (cachedDb) return cachedDb;
+  const client = new MongoClient(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
   });
+  await client.connect();
+  cachedDb = client.db("calorieai"); // your DB name
+  return cachedDb;
+};
 
-  const signature = params.sign;
+// Initialize Alipay SDK
+const alipaySdk = new AlipaySdk({
+  appId: process.env.ALIPAY_APP_ID,
+  privateKey: process.env.ALIPAY_PRIVATE_KEY,
+  alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
+});
 
-  // Verify signature
-  if (!verifySignature(params, signature)) {
-    return { statusCode: 400, body: 'Invalid signature' };
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  // TODO: Check trade_status, update your database, etc.
-  // Example: if (params.trade_status === 'TRADE_SUCCESS') { ... }
+  const params = new URLSearchParams(event.body);
+  const notifyData = Object.fromEntries(params);
 
-  // Respond with 'success' to acknowledge receipt
+  // ✅ Verify Alipay signature
+  const isValid = alipaySdk.checkNotifySign(notifyData);
+  if (!isValid) {
+    console.error("❌ Invalid Alipay signature");
+    return { statusCode: 400, body: "Invalid signature" };
+  }
+
+  // ✅ Payment successful
+  if (notifyData.trade_status === "TRADE_SUCCESS") {
+    const userId = notifyData.passback_params; // you pass metadata here when creating order
+    const amount = parseFloat(notifyData.total_amount);
+
+    try {
+      const db = await connectToDatabase(process.env.MONGO_DB_URI);
+      const users = db.collection("users");
+      const history = db.collection("subscription_history");
+
+      await users.updateOne(
+        { userId },
+        { $set: { isSubscribed: true } },
+        { upsert: true }
+      );
+
+      await history.insertOne({
+        userId,
+        method: "Alipay (WAP)",
+        amount,
+        createdAt: new Date(),
+      });
+
+      console.log(`✅ Subscription recorded for user ${userId}`);
+    } catch (err) {
+      console.error("❌ MongoDB error:", err.message);
+      return { statusCode: 500, body: "Database error" };
+    }
+  }
+
+  // ✅ Always return success response to Alipay
   return {
     statusCode: 200,
-    body: 'success',
+    body: "success",
   };
 };
